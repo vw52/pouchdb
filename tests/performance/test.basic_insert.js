@@ -1,54 +1,61 @@
 'use strict';
 
-var request = require('request');
+var test = require('tape');
 
-if (!process.env.DASHBOARD_HOST) {
-  console.log('DASHBOARD_HOST is required');
-  process.exit(0);
+var PouchDB = require('../../');
+var db, time;
+function mainTest(t) {
+  var num = 1000;
+  function after(err) {
+    if (err) {
+      t.error(err);
+    }
+    num--;
+    if (num) {
+      process.nextTick(function () {
+        db.put({'yo': 'dawg'}, '' + num, after);
+      });
+    } else {
+      t.end();
+    }
+  }
+
+  db.put({'yo': 'dawg'}, '' + num, after);
 }
 
-var DASHBOARD_HOST = 'http://localhost:5984'// process.env.DASHBOARD_HOST;
-var adapters = ['http', 'local'];
+function tearDown(t) {
+  t.ok(true, Date.now() - time + ' ms');
+  db.destroy(function (err) {
+    if (err) {
+      t.error(err, 'no error destoying db');
+    }
+    t.end();
+  });
+}
 
-adapters.forEach(function (adapter) {
-  describe('test.basics.js-' + adapter, function () {
+test('benchmarking local', function (t) {
+  
 
-    var dbs = {};
-    var results;
-
-    beforeEach(function (done) {
-      dbs.name = testUtils.adapterUrl(adapter, 'test_basics');
-      testUtils.cleanup([dbs.name], done);
-    });
-
-    afterEach(function (done) {
-      testUtils.cleanup([dbs.name], done);
-    });
-
-    var before = Date.now();
-    it('Performance: Add 1000 docs', function (done) {
-      var db = new PouchDB(dbs.name);
-      for (var i = 0; i < 1000; i++) {
-        db.post({test: 'somestuff'}, function (err, info) {
-          should.not.exist(err);
-          done();
-        });
-      }
-    });
-    results.basic_insert_time = Date.now() - before;
-    
-    var options = {
-      method: 'POST',
-      uri: DASHBOARD_HOST + '/performance',
-      json: results
-    };
-    
-    request(options, function (error, response, body) {
-      if (!error) {
-        return process.exit(0);
-      } else {
-        return process.exit(1);
-      }
+  t.test('setup', function (t) {
+    new PouchDB('test' + Math.random()).then(function (d) {
+      db = d;
+      time = Date.now();
+      t.end();
     });
   });
+
+  t.test('meat', mainTest);
+
+  t.test('teardown', tearDown);
+});
+test('benchmarking http', function (t) {
+  t.test('setup', function (t) {
+    new PouchDB('http://localhost:5984/perftest' + Math.random().toString().slice(2)).then(function (d) {
+      db = d;
+      time = Date.now();
+      t.end();
+    });
+  });
+  t.test('meat', mainTest);
+  t.test('teardown', tearDown);
 });
